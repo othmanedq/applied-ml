@@ -36,8 +36,8 @@ def plot_reliability(tables, proba, split):
         2, 1, figsize=(6, 7), height_ratios=[3, 1], sharex=True
     )
     curve_ax.plot([0, 1], [0, 1], linestyle="--", color="grey", label="Perfect calibration")
-    for split, table in tables.items():
-        curve_ax.plot(table["mean_predicted"], table["observed_rate"], marker="o", label=split.capitalize())
+    for name, table in tables.items():
+        curve_ax.plot(table["mean_predicted"], table["observed_rate"], marker="o", label=name.capitalize())
     curve_ax.set(ylabel="Observed subscription rate", title="Reliability curve of the final model")
     curve_ax.legend()
     hist_ax.hist(proba, bins=50)
