@@ -4,12 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from sklearn.metrics import roc_auc_score
 
 from src import api
 from src.calibration import calibration_table, summarize
 from src.config import load_config
 from src.data import TARGET, features_and_target, load_data, split_data
-from src.evaluation import best_threshold, time_split
+from src.ablation import add_age_band, add_call_date, log_skewed
+from src.evaluation import best_threshold, bootstrap_intervals, time_split
 from src.fairness import equal_opportunity_thresholds, wilson_interval
 from src.features import FeatureEngineer
 from src.models import FAMILIES, build_pipeline
@@ -69,6 +71,30 @@ def test_time_split_keeps_the_sizes_and_the_order(data, config):
 def test_best_threshold_separates_perfect_scores():
     threshold = best_threshold(np.array([0, 0, 1, 1]), np.array([0.1, 0.2, 0.8, 0.9]))
     assert 0.2 < threshold <= 0.8
+
+
+def test_extra_features(config):
+    X = pd.DataFrame({
+        "age": [25, 45, 70], "month": ["may", "may", "jun"], "day": [5.0, 5.0, 30.0],
+        "balance": [-100.0, 0.0, 5000.0], "campaign": [1, 2, 30], "pdays": [-1, 10, 300],
+        "previous": [0, 1, 20],
+    })
+    assert add_age_band(X, config)["age_band"].tolist() == ["18-29", "30-59", "60+"]
+    assert add_call_date(X)["call_date"].tolist() == ["may-5", "may-5", "jun-30"]
+    logged = log_skewed(X)
+    assert logged["balance"].is_monotonic_increasing and logged["balance"].iloc[0] < 0
+    assert logged["age"].equals(X["age"])
+
+
+def test_bootstrap_intervals_contain_the_score_and_pair_the_gaps():
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 500)
+    probas = {"good": np.clip(y * 0.4 + rng.random(500) * 0.6, 0, 1), "random": rng.random(500)}
+    table = bootstrap_intervals(y, probas, "good", n_resamples=200, seed=0)
+    score = roc_auc_score(y, probas["good"])
+    assert table.loc["good", "roc_auc_low"] < score < table.loc["good", "roc_auc_high"]
+    assert table.loc["good", ["roc_auc_gap_low", "roc_auc_gap_high"]].tolist() == [0, 0]
+    assert table.loc["random", "roc_auc_gap_high"] < 0
 
 
 def test_wilson_interval_known_values():

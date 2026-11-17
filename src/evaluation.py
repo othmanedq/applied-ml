@@ -19,6 +19,8 @@ from sklearn.metrics import (
 from .data import TARGET, features_and_target
 from .models import build_pipeline
 
+BOOTSTRAP_METRICS = {"average_precision": average_precision_score, "roc_auc": roc_auc_score}
+
 
 def best_threshold(y_true, proba):
     """Threshold with the best balanced accuracy, which is also the largest TPR - FPR.
@@ -103,28 +105,58 @@ def time_split(splits):
     return development.iloc[:n_train], development.iloc[n_train:]
 
 
-def time_split_check(splits, final_pipeline, name, params, seed):
-    """Compare the random split with a time split of the same size.
-
-    The time split fits the same model on the oldest rows and scores it on the newest ones.
-    """
+def time_split_predictions(splits, best_params, seed):
+    """Fit every model on the oldest rows and predict the newest ones."""
     oldest, newest = time_split(splits)
-    time_pipeline = build_pipeline(name, params, seed).fit(*features_and_target(oldest))
-    return pd.DataFrame({
-        "random": _split_scores(splits["train"], splits["validation"], final_pipeline),
-        "time": _split_scores(oldest, newest, time_pipeline),
-    }).T.rename_axis("split")
+    X_new, y_new = features_and_target(newest)
+    probas = {}
+    for name, params in best_params.items():
+        pipeline = build_pipeline(name, params, seed).fit(*features_and_target(oldest))
+        probas[name] = pipeline.predict_proba(X_new)[:, 1]
+    return oldest, y_new, probas
 
 
-def _split_scores(fit_part, eval_part, pipeline):
-    X_eval, y_eval = features_and_target(eval_part)
-    proba = pipeline.predict_proba(X_eval)[:, 1]
-    average_precision = average_precision_score(y_eval, proba)
-    return {
-        "fit_subscription_rate": fit_part[TARGET].mean(),
-        "eval_subscription_rate": y_eval.mean(),
-        "mean_predicted": proba.mean(),
-        "roc_auc": roc_auc_score(y_eval, proba),
-        "average_precision": average_precision,
-        "ap_lift": average_precision / y_eval.mean(),
-    }
+def split_scores(fit_part, y_eval, probas):
+    """Scores of each model on one evaluation set, with the subscription rate of the fitting set."""
+    rows = {}
+    for name, proba in probas.items():
+        average_precision = average_precision_score(y_eval, proba)
+        rows[name] = {
+            "fit_subscription_rate": fit_part[TARGET].mean(),
+            "eval_subscription_rate": y_eval.mean(),
+            "mean_predicted": proba.mean(),
+            "roc_auc": roc_auc_score(y_eval, proba),
+            "average_precision": average_precision,
+            "ap_lift": average_precision / y_eval.mean(),
+        }
+    return pd.DataFrame(rows).T.rename_axis("model")
+
+
+def bootstrap_intervals(y_true, probas, reference, n_resamples, seed):
+    """95% bootstrap intervals of the scores of each model, and of its gap to the reference model.
+
+    Every resample draws the same clients for all models, so the gaps are paired.
+    """
+    y_true = np.asarray(y_true)
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(n_resamples):
+        rows = rng.integers(0, len(y_true), len(y_true))
+        draws.append({
+            (name, metric): score(y_true[rows], proba[rows])
+            for name, proba in probas.items()
+            for metric, score in BOOTSTRAP_METRICS.items()
+        })
+    draws = pd.DataFrame(draws)
+    table = {}
+    for name in probas:
+        table[name] = {}
+        for metric in BOOTSTRAP_METRICS:
+            gap = draws[name, metric] - draws[reference, metric]
+            low, high = draws[name, metric].quantile([0.025, 0.975])
+            gap_low, gap_high = gap.quantile([0.025, 0.975])
+            table[name].update({
+                f"{metric}_low": low, f"{metric}_high": high,
+                f"{metric}_gap_low": gap_low, f"{metric}_gap_high": gap_high,
+            })
+    return pd.DataFrame(table).T.rename_axis("model")

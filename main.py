@@ -3,7 +3,7 @@ import argparse
 import matplotlib
 import pandas as pd
 
-from src import calibration, eda, evaluation, explain, fairness, imbalance, tuning
+from src import ablation, calibration, eda, evaluation, explain, fairness, imbalance, tuning
 from src.config import load_config
 from src.data import TARGET, age_group, features_and_target, load_data, split_data
 from src.models import MODEL_NAMES, build_pipeline
@@ -47,6 +47,13 @@ def run_imbalance(config, splits):
     print(table.round(3).to_string(index=False))
 
 
+def run_screening(config, splits):
+    X, y = features_and_target(splits["train"])
+    table = tuning.screen_models(X, y, config)
+    save_table(table, "screening_models", index=False)
+    print(table.round(3).to_string(index=False))
+
+
 def run_tune(config, splits):
     X, y = features_and_target(splits["train"])
     studies = {name: tuning.tune(name, X, y, config) for name in MODEL_NAMES}
@@ -55,6 +62,17 @@ def run_tune(config, splits):
     save_json({name: study.best_params for name, study in studies.items()}, "tuning_best_params")
     save_figure(tuning.plot_history(run_log), tuning.HISTORY_FIGURE)
     print(run_log[run_log["is_best"]].round(4).to_string(index=False))
+
+
+def run_ablation(config, splits):
+    X, y = features_and_target(splits["train"])
+    best_params = load_json("tuning_best_params")
+    features = ablation.feature_ablation(X, y, best_params, config)
+    time_proxies = ablation.time_proxy_ablation(splits, best_params, config)
+    save_table(features, "ablation_features", index=False)
+    save_table(time_proxies, "ablation_time_proxies", index=False)
+    print(features.round(4).to_string(index=False))
+    print(time_proxies.round(4).to_string(index=False))
 
 
 def run_train(config, splits):
@@ -77,8 +95,13 @@ def run_evaluate(config, splits):
     final = validation.loc[MODEL_NAMES, "average_precision"].idxmax()
     threshold = thresholds[final]
 
+    intervals = evaluation.bootstrap_intervals(
+        y_test, {name: test_proba[name] for name in MODEL_NAMES}, final,
+        config["bootstrap"]["n_resamples"], config["seed"],
+    )
     save_table(validation, "evaluation_validation")
     save_table(test, "evaluation_test")
+    save_table(intervals, "evaluation_test_intervals")
     save_model({"name": final, "pipeline": models[final], "threshold": threshold}, "final_model")
     save_json({"final_model": final, "threshold": threshold}, "evaluation_selection")
     model_proba = {name: val_proba[name] for name in MODEL_NAMES}
@@ -93,11 +116,23 @@ def run_evaluate(config, splits):
 
 
 def run_time_split(config, splits):
-    final = load_model("final_model")
-    params = load_json("tuning_best_params")[final["name"]]
-    table = evaluation.time_split_check(splits, final["pipeline"], final["name"], params, config["seed"])
+    final = load_model("final_model")["name"]
+    X_val, y_val = features_and_target(splits["validation"])
+    random_proba = {name: predict(load_model(name), X_val) for name in MODEL_NAMES}
+    oldest, y_new, time_proba = evaluation.time_split_predictions(
+        splits, load_json("tuning_best_params"), config["seed"]
+    )
+    table = pd.concat({
+        "random": evaluation.split_scores(splits["train"], y_val, random_proba),
+        "time": evaluation.split_scores(oldest, y_new, time_proba),
+    }, names=["split"])
+    intervals = evaluation.bootstrap_intervals(
+        y_new, time_proba, final, config["bootstrap"]["n_resamples"], config["seed"]
+    )
     save_table(table, "time_split_check")
+    save_table(intervals, "time_split_intervals")
     print(table.round(3).to_string())
+    print(intervals.round(3).to_string())
 
 
 def run_calibration(config, splits):
@@ -172,7 +207,9 @@ def run_fairness(config, splits):
 STEPS = {
     "eda": run_eda,
     "imbalance": run_imbalance,
+    "screening": run_screening,
     "tune": run_tune,
+    "ablation": run_ablation,
     "train": run_train,
     "evaluate": run_evaluate,
     "time_split": run_time_split,
