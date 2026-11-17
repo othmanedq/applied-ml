@@ -65,9 +65,8 @@ def run_tune(config, splits):
 
 
 def run_ablation(config, splits):
-    X, y = features_and_target(splits["train"])
     best_params = load_json("tuning_best_params")
-    features = ablation.feature_ablation(X, y, best_params, config)
+    features = ablation.feature_ablation(splits, best_params, config)
     time_proxies = ablation.time_proxy_ablation(splits, best_params, config)
     save_table(features, "ablation_features", index=False)
     save_table(time_proxies, "ablation_time_proxies", index=False)

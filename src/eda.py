@@ -43,19 +43,23 @@ def subscription_rate_table(data, columns):
     return table
 
 
-def time_drift_table(data, n_blocks=10):
-    """Subscription rate and share of unknown contact type in blocks of consecutive rows.
+def time_block(data, n_blocks=10):
+    """Block of each row, from 1 (oldest) to n_blocks (newest). The rows are in time order."""
+    blocks = pd.Series(0, index=data.index, name="block")
+    for number, positions in enumerate(np.array_split(np.argsort(data.index), n_blocks), start=1):
+        blocks.iloc[positions] = number
+    return blocks
 
-    The rows are in time order.
-    """
-    ordered = data.sort_index()
-    blocks = np.array_split(np.arange(len(ordered)), n_blocks)
-    return pd.DataFrame({
-        "block": range(1, n_blocks + 1),
-        "rows": [len(block) for block in blocks],
-        "subscription_rate": [ordered[TARGET].iloc[block].mean() for block in blocks],
-        "contact_unknown_share": [(ordered["contact"].iloc[block] == "unknown").mean() for block in blocks],
-    })
+
+def time_drift_table(data, n_blocks=10):
+    """Subscription rate and share of unknown contact type in blocks of consecutive rows."""
+    unknown = (data["contact"] == "unknown").rename("contact_unknown")
+    return (
+        pd.concat([data[TARGET], unknown], axis=1)
+        .groupby(time_block(data, n_blocks))
+        .agg(rows=(TARGET, "size"), subscription_rate=(TARGET, "mean"), contact_unknown_share=("contact_unknown", "mean"))
+        .reset_index()
+    )
 
 
 def _grid(n_plots, n_columns=3, height=3.4):

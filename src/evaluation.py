@@ -118,17 +118,16 @@ def time_split_predictions(splits, best_params, seed):
 
 def split_scores(fit_part, y_eval, probas):
     """Scores of each model on one evaluation set, with the subscription rate of the fitting set."""
-    rows = {}
-    for name, proba in probas.items():
-        average_precision = average_precision_score(y_eval, proba)
-        rows[name] = {
+    rows = {
+        name: {
             "fit_subscription_rate": fit_part[TARGET].mean(),
             "eval_subscription_rate": y_eval.mean(),
             "mean_predicted": proba.mean(),
             "roc_auc": roc_auc_score(y_eval, proba),
-            "average_precision": average_precision,
-            "ap_lift": average_precision / y_eval.mean(),
+            "average_precision": average_precision_score(y_eval, proba),
         }
+        for name, proba in probas.items()
+    }
     return pd.DataFrame(rows).T.rename_axis("model")
 
 

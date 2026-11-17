@@ -10,6 +10,7 @@ from .models import MODEL_NAMES, build_pipeline
 from .tuning import cross_validated_scores
 
 SKEWED = ["balance", "campaign", "pdays", "previous"]
+TIME_PROXIES = ["contact", "month", "day"]
 
 
 def add_age_band(X, config):
@@ -27,53 +28,59 @@ def add_call_date(X):
     return X.assign(call_date=X["month"] + "-" + X["day"].astype(int).astype(str))
 
 
-def _versions(name, params, config):
-    """The tuned pipeline, the same without the engineered features, and with each extra feature."""
-    band = ("age_band", FunctionTransformer(add_age_band, kw_args={"config": config}))
-    logs = ("log_skewed", FunctionTransformer(log_skewed))
-    date = ("call_date", FunctionTransformer(add_call_date))
-    steps = build_pipeline(name, params, config["seed"]).steps
+def drop_columns(X, columns):
+    return X.drop(columns=columns)
+
+
+def _with_step(name, function, steps, **kw_args):
+    """The pipeline with one more step in front, which changes the columns."""
+    return Pipeline([(name, FunctionTransformer(function, kw_args=kw_args or None)), *steps])
+
+
+def _scores(pipeline, splits, config):
+    """CV average precision on train (same period) and ROC-AUC on the time split (newer calls)."""
+    X, y = features_and_target(splits["train"])
+    oldest, newest = time_split(splits)
+    X_new, y_new = features_and_target(newest)
+    scores = cross_validated_scores(pipeline, X, y, config)["average_precision"]
+    proba = pipeline.fit(*features_and_target(oldest)).predict_proba(X_new)[:, 1]
     return {
-        "original columns": Pipeline(steps).set_params(features="passthrough"),
-        "pipeline": Pipeline(steps),
-        "pipeline + age_band": Pipeline([band, *steps]),
-        "pipeline + log_skewed": Pipeline([logs, *steps]),
-        "pipeline + call_date": Pipeline([date, *steps]),
+        "cv_average_precision": scores.mean(),
+        "cv_average_precision_std": scores.std(),
+        "time_split_roc_auc": roc_auc_score(y_new, proba),
     }
 
 
-def _cv_average_precision(pipeline, X, y, config):
-    scores = cross_validated_scores(pipeline, X, y, config)["average_precision"]
-    return {"cv_average_precision": scores.mean(), "cv_average_precision_std": scores.std()}
-
-
-def feature_ablation(X, y, best_params, config):
-    """CV score of each tuned model without the engineered features, and with each extra feature."""
-    rows = [
-        {"model": name, "features": version, **_cv_average_precision(pipeline, X, y, config)}
-        for name in MODEL_NAMES
-        for version, pipeline in _versions(name, best_params[name], config).items()
-    ]
+def feature_ablation(splits, best_params, config):
+    """Each tuned model without the engineered features, and with each extra feature."""
+    rows = []
+    for name in MODEL_NAMES:
+        steps = build_pipeline(name, best_params[name], config["seed"]).steps
+        versions = {
+            "original columns": Pipeline(steps).set_params(features="passthrough"),
+            "pipeline": Pipeline(steps),
+            "pipeline + age_band": _with_step("age_band", add_age_band, steps, config=config),
+            "pipeline + log_skewed": _with_step("log_skewed", log_skewed, steps),
+            "pipeline + call_date": _with_step("call_date", add_call_date, steps),
+        }
+        rows += [
+            {"model": name, "features": version, **_scores(pipeline, splits, config)}
+            for version, pipeline in versions.items()
+        ]
     return pd.DataFrame(rows)
 
 
 def time_proxy_ablation(splits, best_params, config):
-    """Each tuned model without contact, month or day: CV on train, and ROC-AUC on the time split."""
-    X, y = features_and_target(splits["train"])
-    oldest, newest = time_split(splits)
-    X_old, y_old = features_and_target(oldest)
-    X_new, y_new = features_and_target(newest)
+    """Each tuned model without contact, month or day."""
     rows = []
     for name in MODEL_NAMES:
-        for removed in [[], ["contact"], ["month"], ["day"]]:
-            pipeline = build_pipeline(name, best_params[name], config["seed"])
-            scores = _cv_average_precision(pipeline, X.drop(columns=removed), y, config)
-            pipeline.fit(X_old.drop(columns=removed), y_old)
-            proba = pipeline.predict_proba(X_new.drop(columns=removed))[:, 1]
-            rows.append({
-                "model": name,
-                "removed": ", ".join(removed) or "nothing",
-                **scores,
-                "time_split_roc_auc": roc_auc_score(y_new, proba),
-            })
+        steps = build_pipeline(name, best_params[name], config["seed"]).steps
+        versions = {
+            "nothing": Pipeline(steps),
+            **{column: _with_step("drop", drop_columns, steps, columns=[column]) for column in TIME_PROXIES},
+        }
+        rows += [
+            {"model": name, "removed": removed, **_scores(pipeline, splits, config)}
+            for removed, pipeline in versions.items()
+        ]
     return pd.DataFrame(rows)
