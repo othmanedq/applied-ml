@@ -81,16 +81,6 @@ For each client, the answer gives the predicted probability of subscription and 
 true when this probability reaches the decision threshold. The API rejects unknown categories,
 impossible values and empty lists with an HTTP 422 error.
 
-### Report
-
-The report is `report/report.pdf`. Its tables are written from `outputs/tables/` and its figures
-are read from `outputs/figures/`, so it can be rebuilt after a new run:
-
-```bash
-python report/make_tables.py
-cd report && pdflatex report && bibtex report && pdflatex report && pdflatex report
-```
-
 ### Notebook
 
 `notebooks/design_choices.ipynb` justifies the choices of the pipeline. Each section asks one
@@ -122,8 +112,6 @@ Part 1 (the data) only needs the dataset. Part 2 (modelling choices) loads the m
 │   └── utils.py         # saving and loading files
 ├── tests/               # pytest tests
 ├── notebooks/           # data exploration and design choices
-├── report/              # LaTeX report, its tables and its PDF
-├── presentation/        # slides and speaker script of the oral defense
 └── outputs/             # tables (CSV), figures (PNG) and key numbers (JSON)
 ```
 
