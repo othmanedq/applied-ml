@@ -1,0 +1,29 @@
+{
+  "seed": 42,
+  "data": {
+    "openml_id": 1461,
+    "test_size": 0.2,
+    "validation_size": 0.2
+  },
+  "age_groups": {
+    "bins": [
+      17,
+      29,
+      59,
+      100
+    ],
+    "labels": [
+      "18-29",
+      "30-59",
+      "60+"
+    ]
+  },
+  "tuning": {
+    "cv_folds": 5,
+    "n_trials": 30
+  },
+  "shap": {
+    "n_background": 100,
+    "n_explained": 2000
+  }
+}

@@ -1,0 +1,17 @@
+column,dtype,missing,unknown,unique_values,example
+age,float64,0,0,76,43.0
+job,str,0,179,12,services
+marital,str,0,0,3,married
+education,str,0,1100,4,secondary
+default,str,0,0,2,no
+balance,float64,0,0,5896,2478.0
+housing,str,0,0,2,yes
+loan,str,0,0,2,no
+contact,str,0,7790,3,unknown
+day,float64,0,0,31,12.0
+month,str,0,0,12,jun
+campaign,float64,0,0,46,1.0
+pdays,float64,0,0,498,-1.0
+previous,float64,0,0,39,0.0
+poutcome,str,0,22240,4,unknown
+subscribed,int64,0,0,2,0
