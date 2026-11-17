@@ -22,6 +22,9 @@
     "cv_folds": 5,
     "n_trials": 30
   },
+  "bootstrap": {
+    "n_resamples": 1000
+  },
   "shap": {
     "n_background": 100,
     "n_explained": 2000
