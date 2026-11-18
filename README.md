@@ -203,13 +203,12 @@ the chosen threshold.
 
 ### Models and tuning
 
-The project started with the three model families of the course: logistic regression, random
-forest and LightGBM. To check this choice, eight models from six families were then compared with
-their default settings in cross-validation. The rule for changing the choice was fixed before
-running this comparison: each family is represented by its best model, one of the three models is
-replaced only if another model of its family is better by more than the standard deviation across
-folds, and the three best families are the ones that are tuned. The comparison confirms the
-choice. [2.2]
+The project started with the three model families of the course: logistic regression, random forest
+and LightGBM. To check this choice, eight models from six families were then compared with their
+default settings in cross-validation. The rule for changing the choice was fixed before running this
+comparison. Each family is represented by its best model. One of the three models is replaced only
+if another model of its family is better by more than the standard deviation across folds. The three
+best families are the ones that are tuned. The comparison confirms the choice. [2.2]
 
 | Family | Models compared | Reference |
 |---|---|---|
@@ -241,7 +240,7 @@ more stable estimate; a single validation set and a single test set are cheaper,
 depend on one split.
 
 **What the trees add.** One diagnostic feature, the month and day of the call as one category,
-brings the logistic regression to the level of the tree models, and the trees lose a clear part of
+brings the logistic regression to the level of the tree models. The trees also lose a clear part of
 their lead without `day`. Most of what the trees add is therefore this one interaction. The dates
 with a high subscription rate have few calls and are mostly in the newest part of the data, so the
 date is one more way to recognise the recent period. The feature is not added to the pipeline: it
