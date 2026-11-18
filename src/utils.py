@@ -1,9 +1,20 @@
 import json
+from pathlib import Path
 
 import joblib
 import matplotlib.pyplot as plt
+import yaml
 
-from .config import FIGURES, MODELS, OUTPUTS, TABLES
+ROOT = Path(__file__).resolve().parents[1]
+OUTPUTS = ROOT / "outputs"
+FIGURES = OUTPUTS / "figures"
+TABLES = OUTPUTS / "tables"
+MODELS = ROOT / "models"
+
+
+def load_config(path=ROOT / "config.yaml"):
+    with open(path, encoding="utf-8") as file:
+        return yaml.safe_load(file)
 
 
 def _prepare(path):
@@ -11,8 +22,16 @@ def _prepare(path):
     return path
 
 
+def figure_path(name):
+    return FIGURES / f"{name}.png"
+
+
+def model_path(name):
+    return MODELS / f"{name}.joblib"
+
+
 def save_figure(fig, name):
-    fig.savefig(_prepare(FIGURES / f"{name}.png"), dpi=130, bbox_inches="tight")
+    fig.savefig(_prepare(figure_path(name)), dpi=130, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -31,8 +50,8 @@ def load_json(name):
 
 
 def save_model(model, name):
-    joblib.dump(model, _prepare(MODELS / f"{name}.joblib"))
+    joblib.dump(model, _prepare(model_path(name)))
 
 
 def load_model(name):
-    return joblib.load(MODELS / f"{name}.joblib")
+    return joblib.load(model_path(name))

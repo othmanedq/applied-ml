@@ -4,8 +4,8 @@ from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
-from .data import age_group, features_and_target
-from .evaluation import time_split
+from .data import TARGET, age_group, features_and_target
+from .evaluation import predict_newest, time_split
 from .models import MODEL_NAMES, build_pipeline
 from .tuning import cross_validated_scores
 
@@ -40,14 +40,12 @@ def _with_step(name, function, steps, **kw_args):
 def _scores(pipeline, splits, config):
     """CV average precision on train (same period) and ROC-AUC on the time split (newer calls)."""
     X, y = features_and_target(splits["train"])
-    oldest, newest = time_split(splits)
-    X_new, y_new = features_and_target(newest)
+    _, newest = time_split(splits)
     scores = cross_validated_scores(pipeline, X, y, config)["average_precision"]
-    proba = pipeline.fit(*features_and_target(oldest)).predict_proba(X_new)[:, 1]
     return {
         "cv_average_precision": scores.mean(),
         "cv_average_precision_std": scores.std(),
-        "time_split_roc_auc": roc_auc_score(y_new, proba),
+        "time_split_roc_auc": roc_auc_score(newest[TARGET], predict_newest(pipeline, splits)),
     }
 
 

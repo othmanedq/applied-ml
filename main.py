@@ -4,16 +4,11 @@ import matplotlib
 import pandas as pd
 
 from src import ablation, calibration, eda, evaluation, explain, fairness, imbalance, tuning
-from src.config import load_config
 from src.data import TARGET, age_group, features_and_target, load_data, split_data
-from src.models import MODEL_NAMES, build_pipeline
-from src.utils import load_json, load_model, save_figure, save_json, save_model, save_table
+from src.models import MODEL_NAMES, build_pipeline, predict
+from src.utils import load_config, load_json, load_model, save_figure, save_json, save_model, save_table
 
 matplotlib.use("Agg")
-
-
-def predict(model, X):
-    return model.predict_proba(X)[:, 1]
 
 
 def run_eda(config, splits):
@@ -106,10 +101,6 @@ def run_evaluate(config, splits):
     model_proba = {name: val_proba[name] for name in MODEL_NAMES}
     save_figure(evaluation.plot_curves(y_val, model_proba), "evaluation_curves")
     save_figure(evaluation.plot_threshold(y_val, val_proba[final], threshold), "evaluation_threshold")
-    save_figure(
-        evaluation.plot_confusion_matrix(y_test, (test_proba[final] >= threshold).astype(int)),
-        "evaluation_confusion_matrix",
-    )
     print(test.round(3).to_string())
     print(f"Final model: {final} (threshold = {threshold:.3f})")
 
@@ -164,7 +155,6 @@ def run_explain(config, splits):
 
     save_table(importance, "shap_importance")
     save_table(explain.case_table(shap_values, cases, proba, unit), "shap_cases", index=False)
-    save_figure(explain.plot_importance(importance, unit), "shap_importance")
     save_figure(explain.plot_beeswarm(shap_values, unit), "shap_beeswarm")
     for case, position in cases.items():
         title = (
@@ -223,7 +213,6 @@ def main():
     parser.add_argument("--steps", nargs="+", choices=STEPS, default=list(STEPS), help="steps to run")
     args = parser.parse_args()
     config = load_config()
-    save_json(config, "config")
     splits = split_data(load_data(config), config)
     for step, run in STEPS.items():
         if step in args.steps:

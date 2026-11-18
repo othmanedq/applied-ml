@@ -5,8 +5,8 @@ import optuna
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
-from .config import FIGURES, MODELS, ROOT
 from .models import FAMILIES, MODEL_NAMES, build_pipeline, suggest_params
+from .utils import ROOT, figure_path, model_path
 
 SCORING = {
     "average_precision": "average_precision",
@@ -25,17 +25,20 @@ def cross_validated_scores(pipeline, X, y, config, scoring=SCORING):
     return scores
 
 
+def summarize_cv(scores):
+    """Mean of each score over the folds, and the standard deviation of the average precision."""
+    return {
+        **{metric: values.mean() for metric, values in scores.items()},
+        "average_precision_std": scores["average_precision"].std(),
+    }
+
+
 def screen_models(X, y, config):
     """CV scores of every model of FAMILIES with default settings, best first."""
     rows = []
     for name, family in FAMILIES.items():
         scores = cross_validated_scores(build_pipeline(name, {}, config["seed"]), X, y, config)
-        rows.append({
-            "family": family,
-            "model": name,
-            **{metric: values.mean() for metric, values in scores.items()},
-            "average_precision_std": scores["average_precision"].std(),
-        })
+        rows.append({"family": family, "model": name, **summarize_cv(scores)})
     return pd.DataFrame(rows).sort_values("average_precision", ascending=False, ignore_index=True)
 
 
@@ -60,8 +63,8 @@ def tune(name, X, y, config):
 
 def trials_table(study, name):
     """One row per trial: parameters, CV scores, duration and the saved files linked to it."""
-    figure = (FIGURES / f"{HISTORY_FIGURE}.png").relative_to(ROOT)
-    model_file = (MODELS / f"{name}.joblib").relative_to(ROOT)
+    figure = figure_path(HISTORY_FIGURE).relative_to(ROOT)
+    model_file = model_path(name).relative_to(ROOT)
     best = study.best_trial.number
     rows = []
     for trial in study.trials:

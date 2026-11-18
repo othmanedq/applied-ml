@@ -8,13 +8,13 @@ from sklearn.metrics import roc_auc_score
 
 from src import api
 from src.calibration import calibration_table, summarize
-from src.config import load_config
 from src.data import TARGET, features_and_target, load_data, split_data
 from src.ablation import add_age_band, add_call_date, log_skewed
 from src.evaluation import best_threshold, bootstrap_intervals, time_split
 from src.fairness import equal_opportunity_thresholds, wilson_interval
 from src.features import FeatureEngineer
-from src.models import FAMILIES, build_pipeline
+from src.models import FAMILIES, build_pipeline, predict
+from src.utils import load_config
 
 
 @pytest.fixture(scope="module")
@@ -27,14 +27,18 @@ def data(config):
     return load_data(config)
 
 
+@pytest.fixture(scope="module")
+def splits(data, config):
+    return split_data(data, config)
+
+
 def test_data_has_no_leak_and_a_binary_target(data):
     assert "duration" not in data.columns
     assert set(data[TARGET].unique()) == {0, 1}
     assert data.isna().sum().sum() == 0
 
 
-def test_split_is_disjoint_and_stratified(data, config):
-    splits = split_data(data, config)
+def test_split_is_disjoint_and_stratified(data, splits):
     indexes = [set(part.index) for part in splits.values()]
     assert set.union(*indexes) == set(data.index)
     assert sum(len(index) for index in indexes) == len(data)
@@ -56,12 +60,11 @@ def test_feature_engineering():
 @pytest.mark.parametrize("name", ["baseline", *FAMILIES])
 def test_pipeline_returns_probabilities(data, name):
     X, y = features_and_target(data.sample(2000, random_state=0))
-    proba = build_pipeline(name, {}, seed=0).fit(X, y).predict_proba(X)[:, 1]
+    proba = predict(build_pipeline(name, {}, seed=0).fit(X, y), X)
     assert ((proba >= 0) & (proba <= 1)).all()
 
 
-def test_time_split_keeps_the_sizes_and_the_order(data, config):
-    splits = split_data(data, config)
+def test_time_split_keeps_the_sizes_and_the_order(splits):
     oldest, newest = time_split(splits)
     assert len(oldest) == len(splits["train"])
     assert len(newest) == len(splits["validation"])

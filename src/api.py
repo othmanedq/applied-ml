@@ -5,6 +5,7 @@ import pandas as pd
 from fastapi import Body, FastAPI
 from pydantic import BaseModel, Field
 
+from . import models
 from .utils import load_model
 
 app = FastAPI(title="Term deposit subscription model")
@@ -48,7 +49,7 @@ def health():
 
 @app.post("/predict")
 def predict(clients: Annotated[list[Client], Body(min_length=1)]):
-    model = final_model()
+    final = final_model()
     X = pd.DataFrame([client.model_dump() for client in clients])
-    proba = model["pipeline"].predict_proba(X)[:, 1]
-    return [{"probability": float(p), "call": bool(p >= model["threshold"])} for p in proba]
+    proba = models.predict(final["pipeline"], X)
+    return [{"probability": float(p), "call": bool(p >= final["threshold"])} for p in proba]

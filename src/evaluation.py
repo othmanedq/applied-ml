@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    ConfusionMatrixDisplay,
     PrecisionRecallDisplay,
     RocCurveDisplay,
     average_precision_score,
@@ -17,7 +16,7 @@ from sklearn.metrics import (
 )
 
 from .data import TARGET, features_and_target
-from .models import build_pipeline
+from .models import build_pipeline, predict
 
 BOOTSTRAP_METRICS = {"average_precision": average_precision_score, "roc_auc": roc_auc_score}
 
@@ -86,15 +85,6 @@ def plot_threshold(y_true, proba, threshold):
     return fig
 
 
-def plot_confusion_matrix(y_true, predicted):
-    fig, ax = plt.subplots(figsize=(4.5, 4))
-    ConfusionMatrixDisplay.from_predictions(
-        y_true, predicted, display_labels=["No", "Yes"], colorbar=False, ax=ax
-    )
-    fig.tight_layout()
-    return fig
-
-
 def time_split(splits):
     """Oldest and newest rows of train + validation, with the sizes of train and validation.
 
@@ -105,15 +95,21 @@ def time_split(splits):
     return development.iloc[:n_train], development.iloc[n_train:]
 
 
+def predict_newest(pipeline, splits):
+    """Fit the pipeline on the oldest rows and predict the newest ones."""
+    oldest, newest = time_split(splits)
+    X_new, _ = features_and_target(newest)
+    return predict(pipeline.fit(*features_and_target(oldest)), X_new)
+
+
 def time_split_predictions(splits, best_params, seed):
     """Fit every model on the oldest rows and predict the newest ones."""
     oldest, newest = time_split(splits)
-    X_new, y_new = features_and_target(newest)
-    probas = {}
-    for name, params in best_params.items():
-        pipeline = build_pipeline(name, params, seed).fit(*features_and_target(oldest))
-        probas[name] = pipeline.predict_proba(X_new)[:, 1]
-    return oldest, y_new, probas
+    probas = {
+        name: predict_newest(build_pipeline(name, params, seed), splits)
+        for name, params in best_params.items()
+    }
+    return oldest, newest[TARGET], probas
 
 
 def split_scores(fit_part, y_eval, probas):

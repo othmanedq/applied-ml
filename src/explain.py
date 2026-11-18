@@ -69,14 +69,6 @@ def case_table(shap_values, cases, proba, unit):
     return pd.concat(tables)[["case", "probability", "feature", "value", "shap", "unit"]]
 
 
-def plot_importance(importance, unit, top=15):
-    fig, ax = plt.subplots(figsize=(7, 5))
-    importance.head(top).iloc[::-1].plot.barh(ax=ax)
-    ax.set(xlabel=f"Mean absolute SHAP value ({unit})", title="Global feature importance")
-    fig.tight_layout()
-    return fig
-
-
 def plot_beeswarm(shap_values, unit, top=15):
     shap.plots.beeswarm(shap_values, max_display=top, show=False)
     plt.gca().set_xlabel(f"SHAP value ({unit})")

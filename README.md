@@ -108,16 +108,14 @@ Part 1 (the data) only needs the dataset. Part 2 (modelling choices) loads the m
 │   ├── explain.py       # SHAP values
 │   ├── fairness.py      # fairness metrics and group thresholds
 │   ├── api.py           # FastAPI application
-│   ├── config.py        # paths and config loading
-│   └── utils.py         # saving and loading files
+│   └── utils.py         # paths, config loading, saving and loading files
 ├── tests/               # pytest tests
 ├── notebooks/           # data exploration and design choices
 └── outputs/             # tables (CSV), figures (PNG) and key numbers (JSON)
 ```
 
 The output files start with their topic (`eda_`, `imbalance_`, `screening_`, `tuning_`,
-`ablation_`, `evaluation_`, `time_split_`, `calibration_`, `shap_`, `fairness_`). `outputs/config.json` records the settings of
-the last run.
+`ablation_`, `evaluation_`, `time_split_`, `calibration_`, `shap_`, `fairness_`).
 
 ## Method
 

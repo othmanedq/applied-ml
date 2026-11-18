@@ -50,6 +50,11 @@ def make_model(name, params, seed):
     raise ValueError(f"Unknown model: {name}")
 
 
+def predict(model, X):
+    """Probability of subscription."""
+    return model.predict_proba(X)[:, 1]
+
+
 def build_pipeline(name, params, seed):
     return Pipeline([
         ("features", FeatureEngineer()),
